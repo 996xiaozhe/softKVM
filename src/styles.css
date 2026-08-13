@@ -14,6 +14,7 @@
     --border: 240 6% 89%; --input: 240 6% 86%; --ring: 187 85% 38%; --radius: .75rem;
   }
   * { @apply border-border; }
+  html, body, #root { height: 100%; overflow: hidden; }
   body { @apply bg-background text-foreground antialiased; font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
   button, input { -webkit-app-region: no-drag; }
 }
@@ -21,7 +22,7 @@
 .window-titlebar { @apply fixed inset-x-0 top-0 z-50 flex h-10 select-none items-center justify-between border-b bg-card/90 backdrop-blur-xl; }
 .titlebar-button { @apply h-10 w-11 rounded-none text-muted-foreground hover:bg-muted hover:text-foreground; }
 .titlebar-close { @apply hover:bg-destructive hover:text-destructive-foreground; }
-.sidebar { @apply sticky top-10 flex h-[calc(100vh-2.5rem)] w-60 shrink-0 flex-col border-r bg-card/75 px-4 py-6 backdrop-blur-xl; }
+.sidebar { @apply flex h-full w-60 shrink-0 flex-col border-r bg-card/75 px-4 py-6 backdrop-blur-xl; }
 .nav-item { @apply flex h-10 min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground; box-sizing: border-box; }
 .nav-item > span:first-child svg { @apply h-4 w-4; }
 .nav-item-active { @apply bg-primary/10 text-primary hover:bg-primary/15 hover:text-primary; }
@@ -34,7 +35,7 @@
 .theme-option-active { @apply border-primary bg-primary/5 text-foreground ring-1 ring-primary; }
 
 @media (max-width: 760px) {
-  .sidebar { @apply h-[calc(100vh-2.5rem)] w-[4.5rem] px-2; }
+  .sidebar { @apply h-full w-[4.5rem] px-2; }
   .sidebar > div:first-child > div:last-child, .sidebar .nav-item > span:nth-child(2), .sidebar .nav-item > span:last-child { @apply hidden; }
   .sidebar > div:first-child { @apply justify-center px-0; }
   .nav-item { @apply justify-center px-0; }

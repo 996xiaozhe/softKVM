@@ -15,6 +15,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./com
 import { Input } from "./components/ui/input";
 import { Label } from "./components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./components/ui/select";
+import { ScrollArea } from "./components/ui/scroll-area";
 import { Separator } from "./components/ui/separator";
 import { Switch } from "./components/ui/switch";
 
@@ -237,9 +238,9 @@ export default function App() {
   }
 
   return (
-    <main className="min-h-screen bg-background text-foreground">
+    <main className="h-screen overflow-hidden bg-background text-foreground">
       <WindowTitlebar t={t} />
-      <div className="relative flex min-h-screen pt-10">
+      <div className="relative flex h-screen overflow-hidden pt-10">
         <aside className="sidebar">
           <div className="flex items-center gap-3 px-3 pb-7 pt-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20"><MonitorCog className="h-5 w-5" /></div>
@@ -252,8 +253,9 @@ export default function App() {
           </nav>
         </aside>
 
-        <section className="min-w-0 flex-1 px-6 py-8 lg:px-10">
-          <div className="mx-auto max-w-5xl">
+        <section className="min-w-0 flex-1 overflow-hidden">
+          <ScrollArea className="h-full w-full">
+          <div className="mx-auto max-w-5xl px-6 py-8 lg:px-10">
             <PageHeader page={page} scanning={scanning} onScan={scan} t={t} />
             {notice && (!notice.page || notice.page === page) && <Alert className={`mb-5 flex items-center gap-3 pr-2 ${notice.type === "error" ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700"}`}>{notice.type === "error" ? <AlertCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}<span className="flex-1">{notice.text}</span><Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:bg-black/5" title={t("dismiss")} aria-label={t("dismiss")} onClick={() => setNotice(null)}><X className="h-3.5 w-3.5" /></Button></Alert>}
             {shortcutWarning && <Alert className="mb-5 flex items-center gap-3 border-amber-500/30 bg-amber-500/5 pr-2 text-amber-700"><AlertCircle className="h-4 w-4 shrink-0" /><span className="flex-1">{shortcutWarning}</span><Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:bg-black/5" title={t("dismiss")} aria-label={t("dismiss")} onClick={() => setShortcutWarning(null)}><X className="h-3.5 w-3.5" /></Button></Alert>}
@@ -263,6 +265,7 @@ export default function App() {
               {page === "settings" && <SettingsPage t={t} autostart={autostart} loading={autostartLoading} toggle={toggleAutostart} theme={preferences.theme || "cyan"} setTheme={theme => setPreferences(current => ({ ...current, theme }))} locale={preferences.locale || "system"} setLocale={locale => setPreferences(current => ({ ...current, locale }))} />}
             </>}
           </div>
+          </ScrollArea>
         </section>
       </div>
     </main>
