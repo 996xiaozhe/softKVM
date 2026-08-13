@@ -16,6 +16,7 @@ export interface Device {
   shortcut?: string;
 }
 export type ThemeColor = "cyan" | "blue" | "emerald" | "orange" | "zinc";
+export type AppLocale = "system" | "zh-CN" | "zh-TW" | "en" | "ja" | "ko" | "es" | "fr" | "de" | "pt-BR" | "ru" | "ar" | "hi" | "id" | "tr" | "it" | "pl" | "nl" | "vi";
 export interface MonitorPreference {
   alias?: string;
   assignments: Record<string, string | undefined>;
@@ -24,6 +25,7 @@ export interface MonitorPreference {
 export interface Preferences {
   version: 2;
   theme?: ThemeColor;
+  locale?: AppLocale;
   devices: Device[];
   monitors: Record<string, MonitorPreference>;
 }

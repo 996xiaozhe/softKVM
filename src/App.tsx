@@ -1,10 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { register, unregisterAll } from "@tauri-apps/plugin-global-shortcut";
 import { AlertCircle, CheckCircle2, ChevronDown, ChevronRight, Cpu, LayoutGrid, Loader2, Minus, MonitorCog, Plus, RefreshCw, ScanLine, Settings, Trash2, X, Zap } from "lucide-react";
-import type { Device, MonitorInfo, MonitorPreference, Preferences, ThemeColor } from "./types";
+import type { AppLocale, Device, MonitorInfo, MonitorPreference, Preferences, ThemeColor } from "./types";
+import { createTranslator, localeOptions, resolveLocale, type TranslationKey } from "./i18n";
 import { HotkeyInput } from "./components/hotkey-input";
 import { Alert } from "./components/ui/alert";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./components/ui/alert-dialog";
@@ -24,13 +25,14 @@ const EMPTY: Preferences = { version: 2, theme: "cyan", devices: [], monitors: {
 const appWindow = getCurrentWindow();
 type Page = "devices" | "monitors" | "settings";
 type Notice = { type: "error" | "success"; text: string; page?: Page };
+type T = ReturnType<typeof createTranslator>;
 
-const THEMES: Record<ThemeColor, { label: string; primary: string; ring: string; preview: string }> = {
-  cyan: { label: "青色", primary: "187 85% 38%", ring: "187 85% 38%", preview: "bg-cyan-600" },
-  blue: { label: "蓝色", primary: "221 83% 53%", ring: "221 83% 53%", preview: "bg-blue-600" },
-  emerald: { label: "绿色", primary: "160 84% 34%", ring: "160 84% 34%", preview: "bg-emerald-600" },
-  orange: { label: "橙色", primary: "24 95% 50%", ring: "24 95% 50%", preview: "bg-orange-500" },
-  zinc: { label: "中性黑", primary: "240 6% 16%", ring: "240 6% 16%", preview: "bg-zinc-800" },
+const THEMES: Record<ThemeColor, { label: TranslationKey; primary: string; ring: string; preview: string }> = {
+  cyan: { label: "themeCyan", primary: "187 85% 38%", ring: "187 85% 38%", preview: "bg-cyan-600" },
+  blue: { label: "themeBlue", primary: "221 83% 53%", ring: "221 83% 53%", preview: "bg-blue-600" },
+  emerald: { label: "themeEmerald", primary: "160 84% 34%", ring: "160 84% 34%", preview: "bg-emerald-600" },
+  orange: { label: "themeOrange", primary: "24 95% 50%", ring: "24 95% 50%", preview: "bg-orange-500" },
+  zinc: { label: "themeZinc", primary: "240 6% 16%", ring: "240 6% 16%", preview: "bg-zinc-800" },
 };
 
 type ShortcutSyncState = { queue: Promise<void>; revision: number };
@@ -54,7 +56,7 @@ function readPreferences(): Preferences {
       const monitor: MonitorPreference = { alias: oldMonitor.alias, assignments: {} };
       for (const [input, oldInput] of Object.entries(oldMonitor.inputs || {})) {
         if (!oldInput.alias && !oldInput.shortcut) continue;
-        const device: Device = { id: id(), name: oldInput.alias || `设备 ${input}`, shortcut: oldInput.shortcut };
+        const device: Device = { id: id(), name: oldInput.alias || createTranslator()("unnamedDevice", { input }), shortcut: oldInput.shortcut };
         migrated.devices.push(device);
         monitor.assignments[input] = device.id;
       }
@@ -96,6 +98,7 @@ export default function App() {
   const [newDeviceName, setNewDeviceName] = useState("");
   const [autostart, setAutostart] = useState(false);
   const [autostartLoading, setAutostartLoading] = useState(true);
+  const t = useMemo(() => createTranslator(preferences.locale), [preferences.locale]);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences)); }, [preferences]);
   useEffect(() => {
@@ -103,6 +106,11 @@ export default function App() {
     document.documentElement.style.setProperty("--primary", theme.primary);
     document.documentElement.style.setProperty("--ring", theme.ring);
   }, [preferences.theme]);
+  useEffect(() => {
+    const locale = resolveLocale(preferences.locale);
+    document.documentElement.lang = locale;
+    document.documentElement.dir = locale === "ar" ? "rtl" : "ltr";
+  }, [preferences.locale]);
 
   const scan = useCallback(async (showSuccess = false) => {
     setScanning(true); setNotice(null);
@@ -112,13 +120,13 @@ export default function App() {
       if (result.length > 0) localStorage.setItem(MONITOR_CACHE_KEY, JSON.stringify({ version: 1, monitors: result }));
       else localStorage.removeItem(MONITOR_CACHE_KEY);
       if (result.length === 0) {
-        setNotice({ type: "error", text: "没有找到可访问的物理显示器，请检查连接和显卡驱动", page: "monitors" });
+        setNotice({ type: "error", text: t("scanNone"), page: "monitors" });
       } else if (showSuccess) {
-        setNotice({ type: "success", text: `扫描完成，找到 ${result.length} 台物理显示器`, page: "monitors" });
+        setNotice({ type: "success", text: t("scanComplete", { count: result.length }), page: "monitors" });
       }
     } catch (error) { setNotice({ type: "error", text: String(error), page: "monitors" }); }
     finally { setScanning(false); setInitialScanComplete(true); }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (startupProbeStarted.current) return;
@@ -129,7 +137,7 @@ export default function App() {
       .then(ids => { if (!sameMonitorTopology(monitorCache, ids)) void scan(false); })
       .catch(() => undefined);
   }, [monitorCache, scan]);
-  useEffect(() => { isAutostartEnabled().then(setAutostart).catch(error => setNotice({ type: "error", text: `读取开机启动状态失败：${String(error)}` })).finally(() => setAutostartLoading(false)); }, []);
+  useEffect(() => { isAutostartEnabled().then(setAutostart).catch(error => setNotice({ type: "error", text: t("autostartReadFailed", { error: String(error) }) })).finally(() => setAutostartLoading(false)); }, [t]);
 
   const assignmentsForDevice = useCallback((deviceId: string) => {
     const routes: Array<{ monitor: MonitorInfo; input: number; inputName: string }> = [];
@@ -145,18 +153,18 @@ export default function App() {
   const switchDevice = useCallback(async (deviceId: string) => {
     const device = preferences.devices.find(item => item.id === deviceId);
     const routes = assignmentsForDevice(deviceId);
-    if (routes.length === 0) { setNotice({ type: "error", text: `${device?.name || "该设备"} 还没有分配任何显示器端口` }); return; }
+    if (routes.length === 0) { setNotice({ type: "error", text: t("deviceNoRoutes", { name: device?.name || t("deviceFallback") }) }); return; }
     setSwitchingDevice(deviceId);
     const results = await Promise.allSettled(routes.map(route => invoke("switch_input", { request: { monitorId: route.monitor.id, input: route.input } })));
     const succeeded = results.flatMap((result, index) => result.status === "fulfilled" ? [routes[index]] : []);
-    const failed = results.flatMap((result, index) => result.status === "rejected" ? [`${preferences.monitors[routes[index].monitor.id]?.alias || routes[index].monitor.description}：${String(result.reason)}`] : []);
+    const failed = results.flatMap((result, index) => result.status === "rejected" ? [`${preferences.monitors[routes[index].monitor.id]?.alias || routes[index].monitor.description}: ${String(result.reason)}`] : []);
     setMonitors(current => current.map(monitor => {
       const route = succeeded.find(item => item.monitor.id === monitor.id);
       return route ? { ...monitor, currentInput: route.input } : monitor;
     }));
-    setNotice(failed.length ? { type: "error", text: `${device?.name || "设备"} 部分切换失败：${failed.join("；")}` } : { type: "success", text: `已将 ${succeeded.length} 台显示器切换到 ${device?.name || "设备"}` });
+    setNotice(failed.length ? { type: "error", text: t("switchPartialFailed", { name: device?.name || t("deviceFallback"), errors: failed.join("; ") }) } : { type: "success", text: t("switchComplete", { count: succeeded.length, name: device?.name || t("deviceFallback") }) });
     setSwitchingDevice(null);
-  }, [assignmentsForDevice, preferences.devices, preferences.monitors]);
+  }, [assignmentsForDevice, preferences.devices, preferences.monitors, t]);
 
   useEffect(() => {
     let cancelled = false;
@@ -170,16 +178,16 @@ export default function App() {
       try {
         await unregisterAll();
         const duplicate = bound.find((device, index) => bound.findIndex(item => item.shortcut === device.shortcut) !== index);
-        if (duplicate) throw new Error(`快捷键 ${duplicate.shortcut} 被重复绑定`);
+        if (duplicate) throw new Error(t("shortcutDuplicate", { shortcut: duplicate.shortcut! }));
         for (const device of bound) {
           if (revision !== shortcutSyncState.revision) return;
           await register(device.shortcut!, event => { if (event.state === "Pressed") switchDevice(device.id); });
         }
         if (!cancelled) setShortcutWarning(null);
-      } catch (error) { if (!cancelled) setShortcutWarning(`快捷键注册失败：${String(error)}`); }
+      } catch (error) { if (!cancelled) setShortcutWarning(t("shortcutRegistrationFailed", { error: String(error) })); }
     });
     return () => { cancelled = true; };
-  }, [preferences.devices, switchDevice]);
+  }, [preferences.devices, switchDevice, t]);
 
   function updateDevice(deviceId: string, values: Partial<Device>) {
     setPreferences(current => ({ ...current, devices: current.devices.map(device => device.id === deviceId ? { ...device, ...values } : device) }));
@@ -224,35 +232,35 @@ export default function App() {
     try {
       if (enabled) await enableAutostart(); else await disableAutostart();
       setAutostart(await isAutostartEnabled());
-    } catch (error) { setNotice({ type: "error", text: `修改开机启动失败：${String(error)}` }); }
+    } catch (error) { setNotice({ type: "error", text: t("autostartChangeFailed", { error: String(error) }) }); }
     finally { setAutostartLoading(false); }
   }
 
   return (
     <main className="min-h-screen bg-background text-foreground">
-      <WindowTitlebar />
+      <WindowTitlebar t={t} />
       <div className="relative flex min-h-screen pt-10">
         <aside className="sidebar">
           <div className="flex items-center gap-3 px-3 pb-7 pt-2">
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-lg shadow-primary/20"><MonitorCog className="h-5 w-5" /></div>
-            <div><h1 className="font-bold tracking-tight">SoftKVM</h1><p className="text-[11px] text-muted-foreground">显示器信号切换</p></div>
+            <div><h1 className="font-bold tracking-tight">SoftKVM</h1><p className="text-[11px] text-muted-foreground">{t("tagline")}</p></div>
           </div>
           <nav className="space-y-1">
-            <NavItem active={page === "devices"} icon={<Cpu />} label="设备管理" badge={preferences.devices.length} onClick={() => setPage("devices")} />
-            <NavItem active={page === "monitors"} icon={<LayoutGrid />} label="显示器管理" badge={monitors.length} onClick={() => setPage("monitors")} />
-            <NavItem active={page === "settings"} icon={<Settings />} label="设置" onClick={() => setPage("settings")} />
+            <NavItem active={page === "devices"} icon={<Cpu />} label={t("devices")} badge={preferences.devices.length} onClick={() => setPage("devices")} />
+            <NavItem active={page === "monitors"} icon={<LayoutGrid />} label={t("monitors")} badge={monitors.length} onClick={() => setPage("monitors")} />
+            <NavItem active={page === "settings"} icon={<Settings />} label={t("settings")} onClick={() => setPage("settings")} />
           </nav>
         </aside>
 
         <section className="min-w-0 flex-1 px-6 py-8 lg:px-10">
           <div className="mx-auto max-w-5xl">
-            <PageHeader page={page} scanning={scanning} onScan={scan} />
-            {notice && (!notice.page || notice.page === page) && <Alert className={`mb-5 flex items-center gap-3 pr-2 ${notice.type === "error" ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700"}`}>{notice.type === "error" ? <AlertCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}<span className="flex-1">{notice.text}</span><Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:bg-black/5" title="关闭提示" aria-label="关闭提示" onClick={() => setNotice(null)}><X className="h-3.5 w-3.5" /></Button></Alert>}
-            {shortcutWarning && <Alert className="mb-5 flex items-center gap-3 border-amber-500/30 bg-amber-500/5 pr-2 text-amber-700"><AlertCircle className="h-4 w-4 shrink-0" /><span className="flex-1">{shortcutWarning}</span><Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:bg-black/5" title="关闭提示" aria-label="关闭提示" onClick={() => setShortcutWarning(null)}><X className="h-3.5 w-3.5" /></Button></Alert>}
-            {!initialScanComplete ? <InitialScanState /> : <>
-              {page === "devices" && <DevicePage devices={preferences.devices} monitors={monitors} preferences={preferences} newName={newDeviceName} setNewName={setNewDeviceName} createDevice={createDevice} updateDevice={updateDevice} removeDevice={removeDevice} switchDevice={switchDevice} switchingDevice={switchingDevice} assignmentsForDevice={assignmentsForDevice} />}
-              {page === "monitors" && <MonitorPage monitors={monitors} devices={preferences.devices} preferences={preferences} scanning={scanning} scan={() => scan(true)} updateMonitor={updateMonitor} assignDevice={assignDevice} />}
-              {page === "settings" && <SettingsPage autostart={autostart} loading={autostartLoading} toggle={toggleAutostart} theme={preferences.theme || "cyan"} setTheme={theme => setPreferences(current => ({ ...current, theme }))} />}
+            <PageHeader page={page} scanning={scanning} onScan={scan} t={t} />
+            {notice && (!notice.page || notice.page === page) && <Alert className={`mb-5 flex items-center gap-3 pr-2 ${notice.type === "error" ? "border-destructive/40 bg-destructive/5 text-destructive" : "border-emerald-500/30 bg-emerald-500/5 text-emerald-700"}`}>{notice.type === "error" ? <AlertCircle className="h-4 w-4 shrink-0" /> : <CheckCircle2 className="h-4 w-4 shrink-0" />}<span className="flex-1">{notice.text}</span><Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:bg-black/5" title={t("dismiss")} aria-label={t("dismiss")} onClick={() => setNotice(null)}><X className="h-3.5 w-3.5" /></Button></Alert>}
+            {shortcutWarning && <Alert className="mb-5 flex items-center gap-3 border-amber-500/30 bg-amber-500/5 pr-2 text-amber-700"><AlertCircle className="h-4 w-4 shrink-0" /><span className="flex-1">{shortcutWarning}</span><Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 hover:bg-black/5" title={t("dismiss")} aria-label={t("dismiss")} onClick={() => setShortcutWarning(null)}><X className="h-3.5 w-3.5" /></Button></Alert>}
+            {!initialScanComplete ? <InitialScanState t={t} /> : <>
+              {page === "devices" && <DevicePage t={t} devices={preferences.devices} monitors={monitors} preferences={preferences} newName={newDeviceName} setNewName={setNewDeviceName} createDevice={createDevice} updateDevice={updateDevice} removeDevice={removeDevice} switchDevice={switchDevice} switchingDevice={switchingDevice} assignmentsForDevice={assignmentsForDevice} />}
+              {page === "monitors" && <MonitorPage t={t} monitors={monitors} devices={preferences.devices} preferences={preferences} scanning={scanning} scan={() => scan(true)} updateMonitor={updateMonitor} assignDevice={assignDevice} />}
+              {page === "settings" && <SettingsPage t={t} autostart={autostart} loading={autostartLoading} toggle={toggleAutostart} theme={preferences.theme || "cyan"} setTheme={theme => setPreferences(current => ({ ...current, theme }))} locale={preferences.locale || "system"} setLocale={locale => setPreferences(current => ({ ...current, locale }))} />}
             </>}
           </div>
         </section>
@@ -261,16 +269,16 @@ export default function App() {
   );
 }
 
-function InitialScanState() {
+function InitialScanState({ t }: { t: T }) {
   return <Card className="border-dashed bg-card/70"><CardContent className="flex min-h-80 flex-col items-center justify-center px-6 py-14 text-center">
     <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10 text-primary"><Loader2 className="h-6 w-6 animate-spin" /></div>
-    <CardTitle className="mt-5">正在扫描显示器</CardTitle>
-    <CardDescription className="mt-2 max-w-sm">正在通过 DDC/CI 读取物理显示器和输入源信息。部分显示器响应较慢，请稍候。</CardDescription>
-    <p className="mt-5 text-xs text-muted-foreground">检测中…</p>
+    <CardTitle className="mt-5">{t("scanning")}</CardTitle>
+    <CardDescription className="mt-2 max-w-sm">{t("scanningDescription")}</CardDescription>
+    <p className="mt-5 text-xs text-muted-foreground">{t("detecting")}</p>
   </CardContent></Card>;
 }
 
-function WindowTitlebar() {
+function WindowTitlebar({ t }: { t: T }) {
   return <header
     className="window-titlebar"
     data-tauri-drag-region
@@ -280,8 +288,8 @@ function WindowTitlebar() {
       <span data-tauri-drag-region>SoftKVM</span>
     </div>
     <div className="flex h-full items-center">
-      <Button variant="ghost" size="icon" className="titlebar-button" title="最小化" aria-label="最小化窗口" onClick={() => appWindow.minimize()}><Minus className="h-4 w-4" /></Button>
-      <Button variant="ghost" size="icon" className="titlebar-button titlebar-close" title="关闭" aria-label="关闭窗口" onClick={() => appWindow.close()}><X className="h-4 w-4" /></Button>
+      <Button variant="ghost" size="icon" className="titlebar-button" title={t("minimize")} aria-label={t("minimize")} onClick={() => appWindow.minimize()}><Minus className="h-4 w-4" /></Button>
+      <Button variant="ghost" size="icon" className="titlebar-button titlebar-close" title={t("close")} aria-label={t("close")} onClick={() => appWindow.close()}><X className="h-4 w-4" /></Button>
     </div>
   </header>;
 }
@@ -290,65 +298,65 @@ function NavItem({ active, icon, label, badge, onClick }: { active: boolean; ico
   return <button onClick={onClick} className={`nav-item ${active ? "nav-item-active" : ""}`}><span>{icon}</span><span className="flex-1 text-left">{label}</span>{badge != null && <span className="rounded-full bg-muted px-2 py-0.5 text-[10px]">{badge}</span>}</button>;
 }
 
-function PageHeader({ page, scanning, onScan }: { page: Page; scanning: boolean; onScan: (showSuccess?: boolean) => void }) {
-  const content = { devices: ["设备管理", "创建设备，为每个设备分配显示器端口和切换快捷键"], monitors: ["显示器管理", "扫描显示器，并把每个物理接口分配给设备"], settings: ["设置", "配置 SoftKVM 的系统行为"] }[page];
-  return <header className="mb-7 flex items-start justify-between gap-4"><div><h2 className="text-2xl font-bold tracking-tight">{content[0]}</h2><p className="mt-1 text-sm text-muted-foreground">{content[1]}</p></div>{page === "monitors" && <Button variant="outline" onClick={() => onScan(true)} disabled={scanning}>{scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}重新扫描</Button>}</header>;
+function PageHeader({ page, scanning, onScan, t }: { page: Page; scanning: boolean; onScan: (showSuccess?: boolean) => void; t: T }) {
+  const content = { devices: [t("devices"), t("devicesDescription")], monitors: [t("monitors"), t("monitorsDescription")], settings: [t("settings"), t("settingsDescription")] }[page];
+  return <header className="mb-7 flex items-start justify-between gap-4"><div><h2 className="text-2xl font-bold tracking-tight">{content[0]}</h2><p className="mt-1 text-sm text-muted-foreground">{content[1]}</p></div>{page === "monitors" && <Button variant="outline" onClick={() => onScan(true)} disabled={scanning}>{scanning ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{t("rescan")}</Button>}</header>;
 }
 
-function DevicePage({ devices, monitors, preferences, newName, setNewName, createDevice, updateDevice, removeDevice, switchDevice, switchingDevice, assignmentsForDevice }: {
-  devices: Device[]; monitors: MonitorInfo[]; preferences: Preferences; newName: string; setNewName: (value: string) => void; createDevice: () => void; updateDevice: (id: string, values: Partial<Device>) => void; removeDevice: (device: Device) => void; switchDevice: (id: string) => void; switchingDevice: string | null; assignmentsForDevice: (id: string) => Array<{ monitor: MonitorInfo; input: number; inputName: string }>;
+function DevicePage({ t, devices, monitors, preferences, newName, setNewName, createDevice, updateDevice, removeDevice, switchDevice, switchingDevice, assignmentsForDevice }: {
+  t: T; devices: Device[]; monitors: MonitorInfo[]; preferences: Preferences; newName: string; setNewName: (value: string) => void; createDevice: () => void; updateDevice: (id: string, values: Partial<Device>) => void; removeDevice: (device: Device) => void; switchDevice: (id: string) => void; switchingDevice: string | null; assignmentsForDevice: (id: string) => Array<{ monitor: MonitorInfo; input: number; inputName: string }>;
 }) {
   const [deviceToDelete, setDeviceToDelete] = useState<Device | null>(null);
   return <div className="space-y-5">
-    <Card className="border-dashed bg-card/60"><CardContent className="flex flex-wrap items-end gap-3 p-4"><div className="min-w-56 flex-1"><Label htmlFor="new-device">新设备名称</Label><Input id="new-device" className="mt-2" placeholder="例如：PC 1、Xbox、Nintendo Switch" value={newName} onChange={event => setNewName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") createDevice(); }} /></div><Button onClick={createDevice} disabled={!newName.trim()}><Plus className="h-4 w-4" />创建设备</Button></CardContent></Card>
-    {devices.length === 0 && <Empty icon={<Cpu />} title="还没有设备" description="先新建 PC、游戏机等设备，再到“显示器管理”把端口分配给它。" />}
+    <Card className="border-dashed bg-card/60"><CardContent className="flex flex-wrap items-end gap-3 p-4"><div className="min-w-56 flex-1"><Label htmlFor="new-device">{t("newDeviceName")}</Label><Input id="new-device" className="mt-2" placeholder={t("newDevicePlaceholder")} value={newName} onChange={event => setNewName(event.target.value)} onKeyDown={event => { if (event.key === "Enter") createDevice(); }} /></div><Button onClick={createDevice} disabled={!newName.trim()}><Plus className="h-4 w-4" />{t("createDevice")}</Button></CardContent></Card>
+    {devices.length === 0 && <Empty icon={<Cpu />} title={t("noDevices")} description={t("noDevicesDescription")} />}
     <div className="grid gap-4 xl:grid-cols-2">
       {devices.map(device => {
         const routes = assignmentsForDevice(device.id);
-        return <Card key={device.id} className="bg-card/90 backdrop-blur"><CardHeader className="pb-4"><div className="flex items-start gap-3"><div className="device-icon"><Cpu className="h-5 w-5" /></div><div className="min-w-0 flex-1"><Input value={device.name} onChange={event => updateDevice(device.id, { name: event.target.value })} className="h-9 border-transparent bg-transparent px-1 text-lg font-semibold hover:border-input focus:border-input" /><CardDescription className="px-1">已分配 {routes.length} 台显示器</CardDescription></div><Button variant="ghost" size="icon" title={`删除 ${device.name}`} className="text-muted-foreground hover:text-destructive" onClick={() => setDeviceToDelete(device)}><Trash2 className="h-4 w-4" /></Button></div></CardHeader><Separator /><CardContent className="space-y-4 pt-4">
-          <div><Label className="text-xs text-muted-foreground">端口映射</Label><div className="mt-2 flex min-h-8 flex-wrap gap-2">{routes.length ? routes.map(route => <Badge key={`${route.monitor.id}:${route.input}`} variant="secondary">{preferences.monitors[route.monitor.id]?.alias || route.monitor.description} · {route.inputName}</Badge>) : <span className="text-xs text-muted-foreground">尚未分配，请前往显示器管理</span>}</div></div>
-          <div className="flex flex-wrap items-center justify-between gap-3"><HotkeyInput value={device.shortcut} onChange={shortcut => updateDevice(device.id, { shortcut })} /><Button onClick={() => switchDevice(device.id)} disabled={switchingDevice === device.id || routes.length === 0}>{switchingDevice === device.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}切换到此设备</Button></div>
+        return <Card key={device.id} className="bg-card/90 backdrop-blur"><CardHeader className="pb-4"><div className="flex items-start gap-3"><div className="device-icon"><Cpu className="h-5 w-5" /></div><div className="min-w-0 flex-1"><Input value={device.name} onChange={event => updateDevice(device.id, { name: event.target.value })} className="h-9 border-transparent bg-transparent px-1 text-lg font-semibold hover:border-input focus:border-input" /><CardDescription className="px-1">{t("assignedMonitors", { count: routes.length })}</CardDescription></div><Button variant="ghost" size="icon" title={t("deleteDeviceTitle", { name: device.name })} className="text-muted-foreground hover:text-destructive" onClick={() => setDeviceToDelete(device)}><Trash2 className="h-4 w-4" /></Button></div></CardHeader><Separator /><CardContent className="space-y-4 pt-4">
+          <div><Label className="text-xs text-muted-foreground">{t("portMappings")}</Label><div className="mt-2 flex min-h-8 flex-wrap gap-2">{routes.length ? routes.map(route => <Badge key={`${route.monitor.id}:${route.input}`} variant="secondary">{preferences.monitors[route.monitor.id]?.alias || route.monitor.description} · {route.inputName}</Badge>) : <span className="text-xs text-muted-foreground">{t("notAssignedHint")}</span>}</div></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><HotkeyInput value={device.shortcut} onChange={shortcut => updateDevice(device.id, { shortcut })} labels={{ press: t("pressShortcut"), bind: t("bindShortcut"), clear: t("clearShortcut") }} /><Button onClick={() => switchDevice(device.id)} disabled={switchingDevice === device.id || routes.length === 0}>{switchingDevice === device.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Zap className="h-4 w-4" />}{t("switchToDevice")}</Button></div>
         </CardContent></Card>;
       })}
     </div>
-    {devices.length > 0 && monitors.length === 0 && <Alert className="flex items-center gap-2 text-muted-foreground"><AlertCircle className="h-4 w-4" />未扫描到显示器，设备端口映射可能暂时无法显示。</Alert>}
+    {devices.length > 0 && monitors.length === 0 && <Alert className="flex items-center gap-2 text-muted-foreground"><AlertCircle className="h-4 w-4" />{t("noMonitorsMapped")}</Alert>}
     <AlertDialog open={deviceToDelete !== null} onOpenChange={open => { if (!open) setDeviceToDelete(null); }}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>删除设备“{deviceToDelete?.name}”？</AlertDialogTitle>
-          <AlertDialogDescription>这个操作会同时清除该设备在所有显示器上的端口分配和快捷键配置。显示器本身不会受到影响。</AlertDialogDescription>
+          <AlertDialogTitle>{t("deleteDeviceTitle", { name: deviceToDelete?.name || "" })}</AlertDialogTitle>
+          <AlertDialogDescription>{t("deleteDeviceDescription")}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel>取消</AlertDialogCancel>
-          <AlertDialogAction onClick={() => { if (deviceToDelete) removeDevice(deviceToDelete); setDeviceToDelete(null); }}>确认删除</AlertDialogAction>
+          <AlertDialogCancel>{t("cancel")}</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { if (deviceToDelete) removeDevice(deviceToDelete); setDeviceToDelete(null); }}>{t("confirmDelete")}</AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
   </div>;
 }
 
-function MonitorPage({ monitors, devices, preferences, scanning, scan, updateMonitor, assignDevice }: { monitors: MonitorInfo[]; devices: Device[]; preferences: Preferences; scanning: boolean; scan: () => void; updateMonitor: (id: string, updater: (monitor: MonitorPreference) => void) => void; assignDevice: (monitorId: string, input: number, deviceId: string) => void }) {
-  if (!scanning && monitors.length === 0) return <Empty icon={<MonitorCog />} title="没有发现显示器" description="确认显示器已连接且在 OSD 菜单中启用了 DDC/CI。" action={<Button onClick={scan}><ScanLine className="h-4 w-4" />扫描显示器</Button>} />;
+function MonitorPage({ t, monitors, devices, preferences, scanning, scan, updateMonitor, assignDevice }: { t: T; monitors: MonitorInfo[]; devices: Device[]; preferences: Preferences; scanning: boolean; scan: () => void; updateMonitor: (id: string, updater: (monitor: MonitorPreference) => void) => void; assignDevice: (monitorId: string, input: number, deviceId: string) => void }) {
+  if (!scanning && monitors.length === 0) return <Empty icon={<MonitorCog />} title={t("noMonitors")} description={t("noMonitorsDescription")} action={<Button onClick={scan}><ScanLine className="h-4 w-4" />{t("scanMonitors")}</Button>} />;
   return <div className="space-y-5">{monitors.map((monitor, index) => {
     const config = preferences.monitors[monitor.id];
     const expanded = monitor.capabilitiesDetected || config?.compatibilityExpanded;
-    return <Card key={monitor.id} className="overflow-hidden bg-card/90 backdrop-blur"><CardHeader className="pb-4"><div className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0 flex-1"><div className="mb-2 flex items-center gap-2"><Badge variant={monitor.capabilitiesDetected ? "success" : "secondary"}>{monitor.capabilitiesDetected ? "已识别输入源" : "兼容模式"}</Badge><span className="text-xs text-muted-foreground">显示器 {index + 1}</span></div><Input value={config?.alias ?? monitor.description} onChange={event => updateMonitor(monitor.id, item => { item.alias = event.target.value; })} className="h-9 max-w-sm border-transparent bg-transparent px-1 text-lg font-semibold hover:border-input focus:border-input" aria-label="显示器名称" /><CardDescription className="px-1">{monitor.description} · 物理通道 {monitor.physicalIndex + 1}</CardDescription></div>{monitor.currentInput != null && <Badge variant="outline">当前 {hex(monitor.currentInput)}</Badge>}</div></CardHeader><Separator /><CardContent className="pt-5">
-      {!monitor.capabilitiesDetected && <button className="compatibility-toggle" onClick={() => updateMonitor(monitor.id, item => { item.compatibilityExpanded = !item.compatibilityExpanded; })}>{expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}<span className="flex-1 text-left"><strong>扫描失败时的兼容输入源</strong><small>{expanded ? "这些是常见候选值，可随时折叠" : `已隐藏 ${monitor.inputs.length} 个候选端口，点击展开`}</small></span></button>}
+    return <Card key={monitor.id} className="overflow-hidden bg-card/90 backdrop-blur"><CardHeader className="pb-4"><div className="flex flex-wrap items-start justify-between gap-4"><div className="min-w-0 flex-1"><div className="mb-2 flex items-center gap-2"><Badge variant={monitor.capabilitiesDetected ? "success" : "secondary"}>{monitor.capabilitiesDetected ? t("inputsDetected") : t("compatibilityMode")}</Badge><span className="text-xs text-muted-foreground">{t("monitorNumber", { number: index + 1 })}</span></div><Input value={config?.alias ?? monitor.description} onChange={event => updateMonitor(monitor.id, item => { item.alias = event.target.value; })} className="h-9 max-w-sm border-transparent bg-transparent px-1 text-lg font-semibold hover:border-input focus:border-input" aria-label={t("monitorName")} /><CardDescription className="px-1">{monitor.description} · {t("physicalChannel", { number: monitor.physicalIndex + 1 })}</CardDescription></div>{monitor.currentInput != null && <Badge variant="outline">{t("currentInput", { input: hex(monitor.currentInput) })}</Badge>}</div></CardHeader><Separator /><CardContent className="pt-5">
+      {!monitor.capabilitiesDetected && <button className="compatibility-toggle" onClick={() => updateMonitor(monitor.id, item => { item.compatibilityExpanded = !item.compatibilityExpanded; })}>{expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}<span className="flex-1 text-left"><strong>{t("compatibilityInputs")}</strong><small>{expanded ? t("compatibilityExpanded") : t("compatibilityCollapsed", { count: monitor.inputs.length })}</small></span></button>}
       {expanded && <div className="mt-3 space-y-2">{monitor.inputs.map(source => {
         const assigned = config?.assignments?.[String(source.value)] || "unassigned";
         const active = monitor.currentInput === source.value;
-        return <div key={source.value} className={`assignment-row ${active ? "assignment-row-active" : ""}`}><div className="flex min-w-40 flex-1 items-center gap-3"><span className={`h-2 w-2 rounded-full ${active ? "bg-emerald-500" : "bg-muted-foreground/25"}`} /><div><p className="text-sm font-medium">{source.name}</p><p className="font-mono text-[10px] text-muted-foreground">VCP {hex(source.value)}</p></div></div><div className="w-full sm:w-64"><Select value={assigned} onValueChange={value => assignDevice(monitor.id, source.value, value)}><SelectTrigger><SelectValue placeholder="未分配设备" /></SelectTrigger><SelectContent><SelectItem value="unassigned">未分配</SelectItem>{devices.map(device => <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>)}</SelectContent></Select></div></div>;
+        return <div key={source.value} className={`assignment-row ${active ? "assignment-row-active" : ""}`}><div className="flex min-w-40 flex-1 items-center gap-3"><span className={`h-2 w-2 rounded-full ${active ? "bg-emerald-500" : "bg-muted-foreground/25"}`} /><div><p className="text-sm font-medium">{source.name}</p><p className="font-mono text-[10px] text-muted-foreground">VCP {hex(source.value)}</p></div></div><div className="w-full sm:w-64"><Select value={assigned} onValueChange={value => assignDevice(monitor.id, source.value, value)}><SelectTrigger><SelectValue placeholder={t("unassignedDevice")} /></SelectTrigger><SelectContent><SelectItem value="unassigned">{t("unassignedDevice")}</SelectItem>{devices.map(device => <SelectItem key={device.id} value={device.id}>{device.name}</SelectItem>)}</SelectContent></Select></div></div>;
       })}</div>}
-      {expanded && devices.length === 0 && <p className="mt-3 text-xs text-muted-foreground">还没有可分配的设备，请先在设备管理中创建。</p>}
-      <details className="mt-4 text-xs text-muted-foreground"><summary className="cursor-pointer select-none hover:text-foreground">技术信息</summary><pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 font-mono text-[10px]">{monitor.capabilities || "显示器未返回 capabilities 字符串"}</pre></details>
+      {expanded && devices.length === 0 && <p className="mt-3 text-xs text-muted-foreground">{t("noAssignableDevices")}</p>}
+      <details className="mt-4 text-xs text-muted-foreground"><summary className="cursor-pointer select-none hover:text-foreground">{t("technicalInfo")}</summary><pre className="mt-2 max-h-28 overflow-auto whitespace-pre-wrap rounded-md bg-muted p-3 font-mono text-[10px]">{monitor.capabilities || t("noCapabilities")}</pre></details>
     </CardContent></Card>;
   })}</div>;
 }
 
-function SettingsPage({ autostart, loading, toggle, theme, setTheme }: { autostart: boolean; loading: boolean; toggle: (enabled: boolean) => void; theme: ThemeColor; setTheme: (theme: ThemeColor) => void }) {
+function SettingsPage({ t, autostart, loading, toggle, theme, setTheme, locale, setLocale }: { t: T; autostart: boolean; loading: boolean; toggle: (enabled: boolean) => void; theme: ThemeColor; setTheme: (theme: ThemeColor) => void; locale: AppLocale; setLocale: (locale: AppLocale) => void }) {
   return <div className="max-w-2xl space-y-5">
-    <Card className="bg-card/90"><CardHeader><CardTitle>外观</CardTitle><CardDescription>选择应用的强调色，按钮、选中状态和焦点边框会同步更新。</CardDescription></CardHeader><Separator /><CardContent className="pt-5"><Label className="text-base">主题色</Label><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">{(Object.entries(THEMES) as Array<[ThemeColor, typeof THEMES[ThemeColor]]>).map(([value, option]) => <button key={value} type="button" className={`theme-option ${theme === value ? "theme-option-active" : ""}`} onClick={() => setTheme(value)} aria-pressed={theme === value}><span className={`h-5 w-5 rounded-full ${option.preview}`} /><span>{option.label}</span>{theme === value && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}</button>)}</div></CardContent></Card>
-    <Card className="bg-card/90"><CardHeader><CardTitle>系统行为</CardTitle><CardDescription>控制 SoftKVM 如何随 Windows 运行。</CardDescription></CardHeader><Separator /><CardContent className="pt-5"><div className="flex items-center justify-between gap-5"><div><Label htmlFor="autostart" className="text-base">开机自动启动</Label><p className="mt-1 text-sm text-muted-foreground">登录 Windows 后自动运行 SoftKVM，让设备快捷键随时可用。</p></div><Switch id="autostart" checked={autostart} disabled={loading} onCheckedChange={toggle} /></div></CardContent></Card>
+    <Card className="bg-card/90"><CardHeader><CardTitle>{t("appearance")}</CardTitle><CardDescription>{t("appearanceDescription")}</CardDescription></CardHeader><Separator /><CardContent className="space-y-6 pt-5"><div><Label className="text-base">{t("themeColor")}</Label><div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">{(Object.entries(THEMES) as Array<[ThemeColor, typeof THEMES[ThemeColor]]>).map(([value, option]) => <button key={value} type="button" className={`theme-option ${theme === value ? "theme-option-active" : ""}`} onClick={() => setTheme(value)} aria-pressed={theme === value}><span className={`h-5 w-5 rounded-full ${option.preview}`} /><span>{t(option.label)}</span>{theme === value && <CheckCircle2 className="h-3.5 w-3.5 text-primary" />}</button>)}</div></div><div><Label className="text-base">{t("language")}</Label><p className="mt-1 text-sm text-muted-foreground">{t("languageDescription")}</p><Select value={locale} onValueChange={value => setLocale(value as AppLocale)}><SelectTrigger className="mt-3 w-full sm:w-72"><SelectValue /></SelectTrigger><SelectContent>{localeOptions.map(option => <SelectItem key={option.value} value={option.value}>{option.value === "system" ? t("followSystem") : option.label}</SelectItem>)}</SelectContent></Select></div></CardContent></Card>
+    <Card className="bg-card/90"><CardHeader><CardTitle>{t("systemBehavior")}</CardTitle><CardDescription>{t("systemBehaviorDescription")}</CardDescription></CardHeader><Separator /><CardContent className="pt-5"><div className="flex items-center justify-between gap-5"><div><Label htmlFor="autostart" className="text-base">{t("autostart")}</Label><p className="mt-1 text-sm text-muted-foreground">{t("autostartDescription")}</p></div><Switch id="autostart" checked={autostart} disabled={loading} onCheckedChange={toggle} /></div></CardContent></Card>
   </div>;
 }
 

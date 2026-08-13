@@ -17,6 +17,7 @@ SoftKVM 是一个 Windows 原生显示器输入源切换工具。它通过 DDC/C
 - 支持配置 Windows 开机自动启动
 - 关闭窗口后驻留系统托盘，托盘菜单可真正退出
 - 五种可持久化主题色
+- 跟随 Windows 系统语言，或手动选择 18 种常用界面语言
 - 对未完整上报 capabilities 的显示器提供常见输入源兼容列表
 
 ## 技术栈
@@ -53,7 +54,7 @@ npm.cmd run tauri build
 
 ## 数据与安全
 
-- 设备、别名、端口映射、快捷键和主题保存在本机 WebView 存储中。
+- 设备、别名、端口映射、快捷键、主题和语言偏好保存在本机 WebView 存储中。
 - 应用不包含遥测，不会向外部服务器上传显示器信息。
 - 全局快捷键在托盘退出时显式注销；进程异常结束时由 Windows 回收。
 - 本 Beta 使用 NSIS `.exe` 安装包，尚未进行代码签名，Windows SmartScreen 可能显示警告。
@@ -67,4 +68,5 @@ SoftKVM 目前只负责视频输入源切换。网络键盘和鼠标共享计划
 - `src-tauri/src/monitor.rs`：Win32 DDC/CI 枚举、能力解析和输入切换
 - `src-tauri/src/lib.rs`：Tauri 命令与阻塞任务调度
 - `src/App.tsx`：设备组合、端口分配、配置迁移、全局快捷键与三页主界面
+- `src/i18n/`：语言解析与独立翻译资源
 - `src/components/ui/`：shadcn/ui 风格基础组件

@@ -18,7 +18,7 @@ function accelerator(event: React.KeyboardEvent): string | null {
   return [...modifiers, key].join("+");
 }
 
-export function HotkeyInput({ value, onChange, disabled }: { value?: string; onChange: (value: string) => void; disabled?: boolean }) {
+export function HotkeyInput({ value, onChange, disabled, labels }: { value?: string; onChange: (value: string) => void; disabled?: boolean; labels: { press: string; bind: string; clear: string } }) {
   const [capturing, setCapturing] = useState(false);
   return (
     <div className="flex items-center gap-1.5">
@@ -35,9 +35,9 @@ export function HotkeyInput({ value, onChange, disabled }: { value?: string; onC
         }}
       >
         <Keyboard className="h-3.5 w-3.5" />
-        {capturing ? "请按组合键…" : value || "绑定快捷键"}
+        {capturing ? labels.press : value || labels.bind}
       </button>
-      {value && <Button type="button" variant="ghost" size="icon" title="清除快捷键" onClick={() => onChange("")}><X className="h-4 w-4" /></Button>}
+      {value && <Button type="button" variant="ghost" size="icon" title={labels.clear} aria-label={labels.clear} onClick={() => onChange("")}><X className="h-4 w-4" /></Button>}
     </div>
   );
 }
