@@ -47,6 +47,11 @@ pub fn scan() -> Result<Vec<MonitorInfo>, MonitorError> {
 }
 
 #[cfg(not(target_os = "windows"))]
+pub fn probe() -> Result<Vec<String>, MonitorError> {
+    Err(MonitorError::UnsupportedPlatform)
+}
+
+#[cfg(not(target_os = "windows"))]
 pub fn switch_input(_: &SwitchRequest) -> Result<(), MonitorError> {
     Err(MonitorError::UnsupportedPlatform)
 }
@@ -433,6 +438,25 @@ mod windows_impl {
         Ok(result)
     }
 
+    pub fn probe() -> Result<Vec<String>, MonitorError> {
+        let mut result = Vec::new();
+        for (display_index, logical) in logical_monitors()?.into_iter().enumerate() {
+            let physical = match physical_monitors(logical.handle) {
+                Ok(value) => value,
+                Err(_) => continue,
+            };
+            for (physical_index, item) in physical.0.iter().enumerate() {
+                result.push(monitor_id(
+                    &description(&item.description),
+                    display_index,
+                    physical_index,
+                    logical.rect,
+                ));
+            }
+        }
+        Ok(result)
+    }
+
     pub fn switch_input(request: &SwitchRequest) -> Result<(), MonitorError> {
         if !(1..=u8::MAX as u32).contains(&request.input) {
             return Err(MonitorError::InvalidInput(request.input));
@@ -490,4 +514,4 @@ mod windows_impl {
 }
 
 #[cfg(target_os = "windows")]
-pub use windows_impl::{scan, switch_input};
+pub use windows_impl::{probe, scan, switch_input};

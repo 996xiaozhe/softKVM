@@ -35,6 +35,14 @@ async fn scan_monitors() -> Result<Vec<MonitorInfo>, String> {
 }
 
 #[tauri::command]
+async fn probe_monitors() -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(monitor::probe)
+        .await
+        .map_err(|error| format!("显示器检测任务异常终止：{error}"))?
+        .map_err(|error| error.to_string())
+}
+
+#[tauri::command]
 async fn switch_input(request: SwitchRequest) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || monitor::switch_input(&request))
         .await
@@ -92,6 +100,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            probe_monitors,
             scan_monitors,
             switch_input,
             platform_support

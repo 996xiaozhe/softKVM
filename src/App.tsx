@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
@@ -19,6 +19,7 @@ import { Switch } from "./components/ui/switch";
 
 const STORAGE_KEY = "softkvm.preferences.v2";
 const LEGACY_STORAGE_KEY = "softkvm.preferences.v1";
+const MONITOR_CACHE_KEY = "softkvm.monitors.v1";
 const EMPTY: Preferences = { version: 2, theme: "cyan", devices: [], monitors: {} };
 const appWindow = getCurrentWindow();
 type Page = "devices" | "monitors" | "settings";
@@ -63,14 +64,32 @@ function readPreferences(): Preferences {
   } catch { return EMPTY; }
 }
 
+function readMonitorCache(): MonitorInfo[] | null {
+  try {
+    const cache = JSON.parse(localStorage.getItem(MONITOR_CACHE_KEY) || "null") as { version?: number; monitors?: MonitorInfo[] } | null;
+    if (cache?.version !== 1 || !Array.isArray(cache.monitors) || cache.monitors.length === 0) return null;
+    if (cache.monitors.some(monitor => typeof monitor.id !== "string" || !Array.isArray(monitor.inputs))) return null;
+    return cache.monitors.map(monitor => ({ ...monitor, currentInput: null }));
+  } catch { return null; }
+}
+
+function sameMonitorTopology(monitors: MonitorInfo[], ids: string[]) {
+  if (monitors.length !== ids.length) return false;
+  const cachedIds = monitors.map(monitor => monitor.id).sort();
+  const detectedIds = [...ids].sort();
+  return cachedIds.every((id, index) => id === detectedIds[index]);
+}
+
 function hex(value: number) { return `0x${value.toString(16).toUpperCase().padStart(2, "0")}`; }
 
 export default function App() {
+  const [monitorCache] = useState(readMonitorCache);
   const [page, setPage] = useState<Page>("devices");
-  const [monitors, setMonitors] = useState<MonitorInfo[]>([]);
+  const [monitors, setMonitors] = useState<MonitorInfo[]>(() => monitorCache || []);
   const [preferences, setPreferences] = useState<Preferences>(readPreferences);
-  const [scanning, setScanning] = useState(true);
-  const [initialScanComplete, setInitialScanComplete] = useState(false);
+  const [scanning, setScanning] = useState(!monitorCache);
+  const [initialScanComplete, setInitialScanComplete] = useState(Boolean(monitorCache));
+  const startupProbeStarted = useRef(false);
   const [switchingDevice, setSwitchingDevice] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [shortcutWarning, setShortcutWarning] = useState<string | null>(null);
@@ -90,6 +109,8 @@ export default function App() {
     try {
       const result = await invoke<MonitorInfo[]>("scan_monitors");
       setMonitors(result);
+      if (result.length > 0) localStorage.setItem(MONITOR_CACHE_KEY, JSON.stringify({ version: 1, monitors: result }));
+      else localStorage.removeItem(MONITOR_CACHE_KEY);
       if (result.length === 0) {
         setNotice({ type: "error", text: "没有找到可访问的物理显示器，请检查连接和显卡驱动", page: "monitors" });
       } else if (showSuccess) {
@@ -99,7 +120,15 @@ export default function App() {
     finally { setScanning(false); setInitialScanComplete(true); }
   }, []);
 
-  useEffect(() => { scan(false); }, [scan]);
+  useEffect(() => {
+    if (startupProbeStarted.current) return;
+    startupProbeStarted.current = true;
+    if (!monitorCache) { void scan(false); return; }
+
+    void invoke<string[]>("probe_monitors")
+      .then(ids => { if (!sameMonitorTopology(monitorCache, ids)) void scan(false); })
+      .catch(() => undefined);
+  }, [monitorCache, scan]);
   useEffect(() => { isAutostartEnabled().then(setAutostart).catch(error => setNotice({ type: "error", text: `读取开机启动状态失败：${String(error)}` })).finally(() => setAutostartLoading(false)); }, []);
 
   const assignmentsForDevice = useCallback((deviceId: string) => {
