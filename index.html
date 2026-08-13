@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#09090b" />
+    <title>SoftKVM</title>
+  </head>
+  <body>
+    <div id="root">
+      <div class="boot-screen" role="status" aria-live="polite">
+        <div class="boot-logo">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 20h8M12 16v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </div>
+        <div class="boot-spinner"></div>
+        <strong>SoftKVM</strong>
+        <span>正在启动并检测显示器…</span>
+      </div>
+    </div>
+    <style>
+      html,body,#root{width:100%;height:100%;margin:0;background:#fafafa;color:#18181b;font-family:Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+      .boot-screen{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;background:#fafafa}
+      .boot-logo{width:52px;height:52px;display:grid;place-items:center;border-radius:16px;color:#0891b2;background:rgba(8,145,178,.10)}
+      .boot-logo svg{width:27px;height:27px}.boot-spinner{width:22px;height:22px;margin-top:8px;border:2px solid rgba(8,145,178,.18);border-top-color:#0891b2;border-radius:50%;animation:boot-spin .75s linear infinite}
+      .boot-screen strong{margin-top:2px;font-size:16px}.boot-screen span{font-size:12px;color:#71717a}@keyframes boot-spin{to{transform:rotate(360deg)}}
+    </style>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
