@@ -499,6 +499,12 @@ mod windows_impl {
         }
 
         #[test]
+        fn handles_uppercase_capabilities_and_punctuation() {
+            let caps = "(PROT(MONITOR)VCP(10,12,60(0F,10,11,12),D6(01 04)))";
+            assert_eq!(input_values(caps), vec![0x0f, 0x10, 0x11, 0x12]);
+        }
+
+        #[test]
         fn parses_model_name_from_edid_descriptor() {
             let mut edid = vec![0_u8; 128];
             edid[..8].copy_from_slice(&[0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00]);
@@ -509,6 +515,14 @@ mod windows_impl {
                 parse_edid_model_name(&edid).as_deref(),
                 Some("DELL U2723QE")
             );
+        }
+
+        #[test]
+        fn ignores_invalid_edid_header() {
+            let mut edid = vec![0_u8; 128];
+            edid[54..59].copy_from_slice(&[0x00, 0x00, 0x00, 0xfc, 0x00]);
+            edid[59..64].copy_from_slice(b"TEST ");
+            assert_eq!(parse_edid_model_name(&edid), None);
         }
     }
 }

@@ -95,6 +95,7 @@ Run the same checks used by CI:
 
 ```powershell
 npm.cmd run check
+npm.cmd run test
 npm.cmd run build
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
@@ -129,7 +130,7 @@ By submitting a contribution, you agree that it may be distributed under the pro
 
 ### Releases
 
-Pushing a version tag beginning with `v` builds the Windows NSIS installer and publishes a matching GitHub Release. The tag must match the versions in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`. Tags containing `-alpha`, `-beta`, or `-rc` are published as pre-releases.
+Pushing a version tag beginning with `v` runs the same TypeScript and Rust verification gates as CI, then builds the Windows NSIS installer and publishes a matching GitHub Release. The tag must match the versions in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`. Tags containing `-alpha`, `-beta`, or `-rc` are published as pre-releases.
 
 ### License
 
@@ -225,6 +226,7 @@ npm.cmd run tauri dev
 
 ```powershell
 npm.cmd run check
+npm.cmd run test
 npm.cmd run build
 cargo fmt --manifest-path src-tauri/Cargo.toml --check
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets -- -D warnings
@@ -259,7 +261,7 @@ npm.cmd run tauri build
 
 ### 发布
 
-推送以 `v` 开头的版本 tag 后，GitHub Actions 会构建 Windows NSIS 安装包并发布同名 Release。Tag 必须与 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的版本一致；包含 `-alpha`、`-beta` 或 `-rc` 的 tag 会作为预发布版本。
+推送以 `v` 开头的版本 tag 后，GitHub Actions 会先执行与 CI 一致的 TypeScript 与 Rust 校验，再构建 Windows NSIS 安装包并发布同名 Release。Tag 必须与 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的版本一致；包含 `-alpha`、`-beta` 或 `-rc` 的 tag 会作为预发布版本。
 
 ### 开源协议
 
