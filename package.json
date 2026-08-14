@@ -2,6 +2,14 @@
   "name": "softkvm",
   "private": true,
   "version": "0.1.0-beta.3",
+  "description": "Switch monitor inputs with DDC/CI, device groups, global shortcuts, and a system-tray menu.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/996xiaozhe/softKVM.git"
+  },
+  "homepage": "https://github.com/996xiaozhe/softKVM",
+  "bugs": "https://github.com/996xiaozhe/softKVM/issues",
   "type": "module",
   "scripts": {
     "dev": "vite",

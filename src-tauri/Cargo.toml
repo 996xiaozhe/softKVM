@@ -3,6 +3,9 @@ name = "softkvm"
 version = "0.1.0-beta.3"
 description = "Use DDC/CI to switch monitor inputs"
 authors = ["SoftKVM contributors"]
+license = "MIT"
+repository = "https://github.com/996xiaozhe/softKVM"
+homepage = "https://github.com/996xiaozhe/softKVM"
 edition = "2021"
 
 [lib]
