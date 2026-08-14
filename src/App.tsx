@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { disable as disableAutostart, enable as enableAutostart, isEnabled as isAutostartEnabled } from "@tauri-apps/plugin-autostart";
 import { register, unregisterAll } from "@tauri-apps/plugin-global-shortcut";
@@ -172,6 +173,26 @@ export default function App() {
     setNotice(failed.length ? { type: "error", text: t("switchPartialFailed", { name: device?.name || t("deviceFallback"), errors: failed.join("; ") }) } : { type: "success", text: t("switchComplete", { count: succeeded.length, name: device?.name || t("deviceFallback") }) });
     setSwitchingDevice(null);
   }, [assignmentsForDevice, preferences.devices, preferences.monitors, t]);
+
+  useEffect(() => {
+    void invoke("sync_tray_menu", {
+      devices: preferences.devices.map(({ id, name }) => ({ id, name: name.trim() || t("deviceFallback") })),
+      labels: {
+        devices: t("trayDevices"),
+        noDevices: t("trayNoDevices"),
+        show: t("trayShow"),
+        quit: t("trayQuit"),
+      },
+    }).catch(error => setNotice({ type: "error", text: t("traySyncFailed", { error: String(error) }) }));
+  }, [preferences.devices, t]);
+
+  useEffect(() => {
+    let disposed = false;
+    let removeListener: (() => void) | undefined;
+    void listen<string>("tray-switch-device", event => { void switchDevice(event.payload); })
+      .then(unlisten => { if (disposed) unlisten(); else removeListener = unlisten; });
+    return () => { disposed = true; removeListener?.(); };
+  }, [switchDevice]);
 
   useEffect(() => {
     let cancelled = false;
