@@ -22,6 +22,7 @@ import { Switch } from "./components/ui/switch";
 const STORAGE_KEY = "softkvm.preferences.v2";
 const LEGACY_STORAGE_KEY = "softkvm.preferences.v1";
 const MONITOR_CACHE_KEY = "softkvm.monitors.v1";
+const STARTUP_SCAN_GRACE_MS = 10_000;
 const EMPTY: Preferences = { version: 2, theme: "cyan", devices: [], monitors: {} };
 const appWindow = getCurrentWindow();
 type Page = "devices" | "monitors" | "settings";
@@ -102,6 +103,11 @@ export default function App() {
   const t = useMemo(() => createTranslator(preferences.locale), [preferences.locale]);
 
   useEffect(() => { localStorage.setItem(STORAGE_KEY, JSON.stringify(preferences)); }, [preferences]);
+  useEffect(() => {
+    if (initialScanComplete) return;
+    const timer = window.setTimeout(() => setInitialScanComplete(true), STARTUP_SCAN_GRACE_MS);
+    return () => window.clearTimeout(timer);
+  }, [initialScanComplete]);
   useEffect(() => {
     const theme = THEMES[preferences.theme || "cyan"];
     document.documentElement.style.setProperty("--primary", theme.primary);
@@ -339,6 +345,7 @@ function DevicePage({ t, devices, monitors, preferences, newName, setNewName, cr
 }
 
 function MonitorPage({ t, monitors, devices, preferences, scanning, scan, updateMonitor, assignDevice }: { t: T; monitors: MonitorInfo[]; devices: Device[]; preferences: Preferences; scanning: boolean; scan: () => void; updateMonitor: (id: string, updater: (monitor: MonitorPreference) => void) => void; assignDevice: (monitorId: string, input: number, deviceId: string) => void }) {
+  if (scanning && monitors.length === 0) return <InitialScanState t={t} />;
   if (!scanning && monitors.length === 0) return <Empty icon={<MonitorCog />} title={t("noMonitors")} description={t("noMonitorsDescription")} action={<Button onClick={scan}><ScanLine className="h-4 w-4" />{t("scanMonitors")}</Button>} />;
   return <div className="space-y-5">{monitors.map((monitor, index) => {
     const config = preferences.monitors[monitor.id];
