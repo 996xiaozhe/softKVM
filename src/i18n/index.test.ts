@@ -23,12 +23,12 @@ describe("resolveLocale", () => {
 describe("createTranslator", () => {
   it("substitutes template values", () => {
     const t = createTranslator("en");
-    expect(t("monitorInput", { value: "0x0F" })).toContain("0x0F");
+    expect(t("currentInput", { input: "HDMI 1" })).toContain("HDMI 1");
   });
 
   it("uses English when system locale is unsupported", () => {
     vi.stubGlobal("navigator", { language: "eo-EO", languages: ["eo-EO"] });
     const t = createTranslator("system");
-    expect(t("appTitle")).toBe("SoftKVM");
+    expect(t("tagline")).toBe("Monitor input switching");
   });
 });
