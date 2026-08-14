@@ -42,6 +42,19 @@ npm.cmd run tauri dev
 npm.cmd run tauri build
 ```
 
+## 发布
+
+推送以 `v` 开头的版本 tag 会触发 GitHub Actions，在 Windows runner 上构建 NSIS 安装包，并创建同名 GitHub Release、生成发布说明和上传安装产物。
+
+发布前需确保 `package.json`、`src-tauri/Cargo.toml` 和 `src-tauri/tauri.conf.json` 中的版本号与 tag 一致，例如：
+
+```powershell
+git tag v0.1.0-beta.3
+git push origin v0.1.0-beta.3
+```
+
+包含 `-beta`、`-alpha` 或 `-rc` 的 tag 会自动标记为 Pre-release。普通分支 push 不会运行 Release 工作流。
+
 ## 硬件兼容性
 
 1. 在显示器 OSD 菜单中启用 **DDC/CI**。

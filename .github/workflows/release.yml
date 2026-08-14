@@ -1,0 +1,70 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  windows:
+    name: Build Windows installer
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Restore Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Verify tag matches project version
+        shell: pwsh
+        run: |
+          $tagVersion = "${{ github.ref_name }}" -replace '^v', ''
+          $npmVersion = (Get-Content package.json -Raw -Encoding UTF8 | ConvertFrom-Json).version
+          $tauriVersion = (Get-Content src-tauri/tauri.conf.json -Raw -Encoding UTF8 | ConvertFrom-Json).version
+          $cargoVersion = if ((Get-Content src-tauri/Cargo.toml -Raw -Encoding UTF8) -match '(?ms)^\[package\].*?^version\s*=\s*"([^"]+)"') { $Matches[1] } else { throw "Cannot read Cargo package version" }
+
+          $versions = @{
+            tag = $tagVersion
+            npm = $npmVersion
+            tauri = $tauriVersion
+            cargo = $cargoVersion
+          }
+          $versions.GetEnumerator() | Sort-Object Name | Format-Table -AutoSize
+
+          if ($versions.Values | Where-Object { $_ -ne $tagVersion }) {
+            throw "Tag version must match package.json, tauri.conf.json, and Cargo.toml"
+          }
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Build and publish GitHub Release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: SoftKVM ${{ github.ref_name }}
+          generateReleaseNotes: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          args: --bundles nsis
